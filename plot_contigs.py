@@ -9,6 +9,7 @@ from itertools import groupby, cycle
 from operator import itemgetter
 import numpy as np
 import matplotlib.pyplot as plt
+import sys
 
 def plot_contig_row(dataframe, x = 'Mb', y = 'lod', kind = 'skyscrapers', baselevel = None, 
               colors = ['r','g','b'], msize = 5, fig = None, ax = None, 
@@ -26,7 +27,6 @@ def plot_contig_row(dataframe, x = 'Mb', y = 'lod', kind = 'skyscrapers', basele
     msize = 5
     tmp_x_start_chr = 0
     x_start_chr = {}
-    col = 'lod'
     xs = {}
     ys = {}
     cs = {}
@@ -40,7 +40,7 @@ def plot_contig_row(dataframe, x = 'Mb', y = 'lod', kind = 'skyscrapers', basele
         x_start_chr[seqid] = round_tick(tmp_x_start_chr)
         region_xs = [float(it) * rescale_x + x_start_chr[seqid] for it in list(chr_data[x]) ]
         xs[seqid] = region_xs
-        ys[seqid] = list(chr_data[col])
+        ys[seqid] = list(chr_data[y])
         cs[seqid] = colors.__next__()
         tmp_x_start_chr += _len_by_chr_[seqid]
         
@@ -49,7 +49,7 @@ def plot_contig_row(dataframe, x = 'Mb', y = 'lod', kind = 'skyscrapers', basele
     fig = plt.figure()
     ax = fig.add_subplot(111) # ax = fig.add_axes((0.1, 0.09, 0.88, 0.85))
     
-    ax.set_ylabel(col)
+    ax.set_ylabel(y)
     
     if baselevel is None:
         ymin = float('Inf')
@@ -123,4 +123,80 @@ def plot_contig_row(dataframe, x = 'Mb', y = 'lod', kind = 'skyscrapers', basele
         #ax.xaxis.get_majorticklabels()[ xt ]._color = cs[cc]
         for xx in chr_xtick_indices[cc]:
             ax.xaxis.get_majorticklabels()[ xx ]._color = cs[cc]
+    return fig, ax
+
+
+def plot_contig_col(self,  x = 'Mb', y = ['p_stat', 'p_slct'], x0 = 'x',
+             peaks = False, len_by_chr = {}):
+#        ax.plot(self['Mb'] , self['p_slct'], 'r.-', label='selection')
+#        ax.plot(self['Mb'] , self['p_stat'], 'g-', label='no selection')
+    from matplotlib import gridspec
+
+
+    def find_peaks(y, tolerance = None):
+        ddy = np.diff(y, 2)
+        signs = np.diff(np.sign(np.diff(y) )) !=0
+        if tolerance is None:
+            tolerance = np.median(np.abs(ddy[signs])) / 8
+        return np.concatenate(([False,], \
+        signs * (ddy < -tolerance), [False,]) )
+    
+    def plot_peaks(x_, y_, xlab_ = None, ax = plt.gca()):
+        if type(xlab_) == type(None):
+            xlab_ = x_
+        "find peaks"
+        ind = find_peaks(y_)
+        ax.plot(x_[ind] , y_[ind], 'o', markersize = 8, markerfacecolor = 'none',\
+        markeredgecolor = 'r')
+        for n in range(len(ind)):
+            if ind[n]:
+                print('peak: %u' % n, file=sys.stderr)
+                x, y, xl = x_[n] , y_[n], xlab_[n] 
+                ax.text(x, y, "{:,}".format(xl), style='italic')
+        print('number of peaks: %u' % sum(ind), file=sys.stderr)
+        return
+    
+    fig = plt.figure() 
+    fig.suptitle( (', '.join(y) if type(y) is list else y) + ' for all contigs' )
+    
+    nsubpl = len(self.contigs)
+    nn = [1]
+    ax = []
+    height = (1-0.2)/ nsubpl
+    left = 0.07
+    all_widths = 0
+    
+    for chromosome in self.contigs:
+        all_widths += self.chromosome_lengths['Chr1']
+    all_widths =  float(max(sr.chromosome_lengths)) / 0.8
+    
+#        for chromosome in self.contigs:
+#            chr_data = self.data.loc[chromosome]        
+    for chromosome, chr_data  in self.data.groupby(level=0):
+        if not chromosome in self.contigs:
+            continue
+        width = self.chromosome_lengths[chromosome] / all_widths
+        if width < 0.05:
+            continue
+        
+        bottom = (nsubpl - nn[0]) / len(self.contigs)
+        ax_box = [left, bottom, width, height]
+        ##############################
+        ax.append(  fig.add_subplot(nsubpl,1,nn[0]) )
+        ax[-1].set_position(ax_box)
+
+        nn[0] += 1
+        chr_data.plot(ax = ax[-1], x = x, y = y, 
+           label = y)
+        if peaks:
+            plot_peaks(np.array(chr_data[x]),
+                       np.array(chr_data[y[-1] if type([1,2]) is list else y]),
+                       np.array(chr_data[x0]), 
+                       ax = ax[-1])
+        
+    ax[-1].set_xlabel('position, Mb', fontsize=12)
+    for aa in ax:
+        aa.legend('', frameon = False)
+    fig.show()
+    print('===================================' , file=sys.stderr)
     return fig, ax
