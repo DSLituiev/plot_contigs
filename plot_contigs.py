@@ -29,15 +29,16 @@ def plot_contig_row(dataframe, x = 'Mb', y = 'lod', xlabel = None, ylabel = None
     
     if xgrid_minor_step == None:
 #        if oom<=3:
-        xgrid_minor_step = 10 ** (np.floor(oom) - 1)
+        xgrid_minor_step = rescale_x * 10 ** (np.floor(oom) - 1) 
 #        else:
-        thousands = np.floor(np.mod(oom , 3))
+#        thousands = np.floor(np.mod(oom , 3))
 #            xgrid_minor_step = 10 ** (3*thousands)
         xgrid_step = xgrid_minor_step * 5
     elif not xgrid_step > xgrid_minor_step:
         xgrid_step = 10* xgrid_minor_step
     if not normal_font_spacing:
         normal_font_spacing = xgrid_minor_step * 2
+    print("xgrid steps\nmajor: %.2f\tminor: %.2f" % (xgrid_step, xgrid_minor_step) , file=sys.stderr)
     
     if round_contig:
         round_tick = lambda x_: np.ceil( x_ / xgrid_minor_step) * xgrid_minor_step
@@ -51,22 +52,22 @@ def plot_contig_row(dataframe, x = 'Mb', y = 'lod', xlabel = None, ylabel = None
     cs = {}
     midpoint_by_chr = {}
     _len_by_chr_ = {}
-    for seqid, chr_data in dataframe.groupby(level=0):
-        
-        ofs = 0 if not offset else chr_data[x].iloc[0] - 1
+
+    for seqid, chr_data in dataframe.groupby(level=0):        
+        ofs = 0 if not offset else chr_data[x].iloc[0]
         if seqid not in len_by_chr:
             _len_by_chr_[seqid] = round_tick( float(chr_data[x].ix[-1] - ofs) * rescale_x)
         else:
             _len_by_chr_[seqid] = round_tick( float(len_by_chr[seqid] - ofs) * rescale_x)
         x_start_chr[seqid] = (tmp_x_start_chr)
-        region_xs = [float(it - ofs ) * rescale_x + x_start_chr[seqid]  for it in list(chr_data[x]) ]
+        region_xs = [float(it - ofs) * rescale_x + x_start_chr[seqid]  for it in list(chr_data[x]) ]
         xs[seqid] = region_xs
         ys[seqid] = list(chr_data[y])
         cs[seqid] = colors.__next__()
-        tmp_x_start_chr += _len_by_chr_[seqid] + 1
-        
-    chr_order = dataframe.index.levels[0].unique()
-        
+        tmp_x_start_chr += _len_by_chr_[seqid]    
+
+    chr_order = dataframe.index.astype(str).unique()
+    
     if fig is None:
         fig = plt.figure(figsize=(20,5))
     if ax is None:
@@ -126,22 +127,21 @@ def plot_contig_row(dataframe, x = 'Mb', y = 'lod', xlabel = None, ylabel = None
     cum_ii = 0
     mj_tick_type = float if np.mod(xgrid_step ,1) > 0 else int
     mn_tick_type = float if np.mod(xgrid_minor_step ,1) > 0 else int
-        
     for cc in chr_order:
-        x_minor_grid = np.arange(0, _len_by_chr_[cc], xgrid_minor_step, dtype = mn_tick_type)
-        x_grid = np.arange(0, _len_by_chr_[cc], xgrid_step, dtype = mj_tick_type)
-        first_chr_xtick_index[cc] = len(x_tick_label)
-        x_tick_label.extend([cc] + list(x_grid[1:]))
-        x_ticks.extend(cum_ii + x_grid)
-        
-        x_minor_ticks.extend(cum_ii + x_minor_grid)
-        chr_xtick_indices[cc] = first_chr_xtick_index[cc] + np.arange(0, 1+len(x_grid[1:]), dtype = int)
-        cum_ii += _len_by_chr_[cc]
-        "make the font for small chromosomes tiny"
-        if not x_grid[0] and _len_by_chr_[cc] < normal_font_spacing:
-            font_size_coef[cc] = _len_by_chr_[cc] / normal_font_spacing
-        else:
-            font_size_coef[cc] = 1
+            x_minor_grid = np.arange(0, _len_by_chr_[cc], xgrid_minor_step, dtype = mn_tick_type)
+            x_grid = np.arange(0, _len_by_chr_[cc], xgrid_step, dtype = mj_tick_type)
+            first_chr_xtick_index[cc] = len(x_tick_label)
+            x_tick_label.extend([cc] + list(x_grid[1:]))
+            x_ticks.extend(cum_ii + x_grid)
+            
+            x_minor_ticks.extend(cum_ii + x_minor_grid)
+            chr_xtick_indices[cc] = first_chr_xtick_index[cc] + np.arange(0, 1+len(x_grid[1:]), dtype = int)
+            cum_ii += _len_by_chr_[cc]
+            "make the font for small chromosomes tiny"
+            if not x_grid[0] and _len_by_chr_[cc] < normal_font_spacing:
+                font_size_coef[cc] = _len_by_chr_[cc] / normal_font_spacing
+            else:
+                font_size_coef[cc] = 1
     "plot the grid"
     ax.xaxis.get_majorticklabels()
     ax.xaxis.grid('on', which='major')
@@ -149,8 +149,7 @@ def plot_contig_row(dataframe, x = 'Mb', y = 'lod', xlabel = None, ylabel = None
     assert ( len(x_ticks) < 300), "too many ticks"
     
     ax.set_xticks(x_ticks, minor = False)
-    ax.set_xticklabels(x_tick_label, minor = False)
-    
+    ax.set_xticklabels(x_tick_label, minor = False)    
     ax.set_xticks(x_minor_ticks, minor = True)
     
     for cc, xt in first_chr_xtick_index.items():
